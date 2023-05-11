@@ -2,7 +2,12 @@ module m7s.live/plugin/ps/v4
 
 go 1.19
 
-require m7s.live/engine/v4 v4.12.7
+require (
+	github.com/pion/rtp v1.7.13
+	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274
+	go.uber.org/zap v1.23.0
+	m7s.live/engine/v4 v4.12.8
+)
 
 require (
 	github.com/aler9/gortsplib/v2 v2.2.2 // indirect
@@ -18,7 +23,6 @@ require (
 	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/webrtc/v3 v3.1.49 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/q191201771/naza v0.30.8 // indirect
@@ -29,11 +33,9 @@ require (
 	github.com/shirou/gopsutil/v3 v3.22.10 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
-	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.4.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.7.0 // indirect
