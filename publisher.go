@@ -13,7 +13,6 @@ import (
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/codec"
 	"m7s.live/engine/v4/codec/mpegts"
-	"m7s.live/engine/v4/track"
 	. "m7s.live/engine/v4/track"
 	"m7s.live/engine/v4/util"
 	"m7s.live/plugin/ps/v4/mpegps"
@@ -26,7 +25,7 @@ type cacheItem struct {
 
 type PSPublisher struct {
 	Publisher
-	relayTrack *track.Data
+	relayTrack *PSTrack
 	rtp.Packet
 	DisableReorder bool //是否禁用rtp重排序,TCP模式下应当禁用
 	// mpegps.MpegPsStream `json:"-" yaml:"-"`
@@ -45,8 +44,7 @@ func (p *PSPublisher) OnEvent(event any) {
 	case IPublisher:
 		p.dumpLen = make([]byte, 6)
 		if conf.RelayMode != 0 {
-			p.relayTrack = p.Stream.NewDataTrack("ps", nil)
-			p.relayTrack.Attach()
+			p.relayTrack = NewPSTrack(p.Stream)
 		}
 	case SEclose, SEKick:
 		conf.streams.Delete(p.Stream.Path)
@@ -90,20 +88,14 @@ func (p *PSPublisher) ServeUDP(conn *net.UDPConn) {
 		p.PushPS(bufUDP[:n])
 	}
 }
+
 func (p *PSPublisher) PushPS(ps util.Buffer) {
-	if conf.RelayMode != 0 {
-		item := p.pool.Get(len(ps))
-		copy(item.Value, ps)
-		p.relayTrack.Push(item)
+	if err := p.Unmarshal(ps); err != nil {
+		p.Error("gb28181 decode rtp error:", zap.Error(err))
+	} else if !p.IsClosed() {
+		p.writeDump(ps)
 	}
-	if conf.RelayMode != 1 {
-		if err := p.Unmarshal(ps); err != nil {
-			p.Error("gb28181 decode rtp error:", zap.Error(err))
-		} else if !p.IsClosed() {
-			p.writeDump(ps)
-		}
-		p.pushPS()
-	}
+	p.pushPS()
 }
 
 // 解析rtp封装 https://www.ietf.org/rfc/rfc2250.txt
@@ -118,6 +110,14 @@ func (p *PSPublisher) pushPS() {
 		p.EsHandler = p
 		p.lastSeq = p.SequenceNumber - 1
 		p.pool = make(util.BytesPool, 17)
+	}
+	if conf.RelayMode != 0 {
+		item := p.pool.Get(len(p.Packet.Payload))
+		copy(item.Value, p.Packet.Payload)
+		p.relayTrack.Push(item)
+	}
+	if conf.RelayMode == 1 && p.relayTrack.PSM != nil {
+		return
 	}
 	if p.DisableReorder {
 		p.Feed(p.Packet.Payload)
@@ -210,7 +210,7 @@ func (p *PSPublisher) OnPacket(pkg mpeg2.Display, decodeResult error) {
 }
 
 func (p *PSPublisher) ReceiveVideo(es mpegps.MpegPsEsStream) {
-	if !conf.PubVideo {
+	if !conf.PubVideo || conf.RelayMode == 1 {
 		return
 	}
 	if p.VideoTrack == nil {
@@ -248,7 +248,7 @@ func (p *PSPublisher) ReceiveVideo(es mpegps.MpegPsEsStream) {
 }
 
 func (p *PSPublisher) ReceiveAudio(es mpegps.MpegPsEsStream) {
-	if !conf.PubAudio {
+	if !conf.PubAudio || conf.RelayMode == 1 {
 		return
 	}
 	ts, payload := es.PTS, es.Buffer
@@ -305,4 +305,9 @@ func (p *PSPublisher) Replay(f *os.File) (err error) {
 		p.PushPS(payload)
 	}
 	return
+}
+func (p *PSPublisher) ReceivePSM(buf util.Buffer) {
+	if p.relayTrack != nil {
+		p.relayTrack.PSM = buf.Clone()
+	}
 }

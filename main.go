@@ -12,16 +12,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	"github.com/pion/rtp"
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/config"
 	"m7s.live/engine/v4/lang"
+	"m7s.live/engine/v4/track"
 	"m7s.live/engine/v4/util"
 )
 
 type PSConfig struct {
+	config.HTTP
 	config.Publish
+	config.Subscribe
 	RelayMode int // 转发模式,0:转协议+不转发,1:不转协议+转发，2:转协议+转发
 	streams   sync.Map
 	shareTCP  sync.Map
@@ -110,6 +115,43 @@ func (c *PSConfig) ServeUDP(conn *net.UDPConn) {
 		}
 		lastPubber.Packet = rtpPacket
 		lastPubber.pushPS()
+	}
+}
+
+func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	streamPath := strings.TrimPrefix(r.URL.Path, "/")
+	if r.URL.RawQuery != "" {
+		streamPath += "?" + r.URL.RawQuery
+	}
+	conn, _, _, err := ws.UpgradeHTTP(r, w)
+	if err != nil {
+		return
+	}
+	var suber PSSubscriber
+	suber.SetIO(conn)
+	suber.SetParentCtx(r.Context())
+	suber.ID = r.RemoteAddr
+
+	if err = PSPlugin.Subscribe(streamPath, &suber); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	defer suber.Stop()
+	b, err := wsutil.ReadClientBinary(conn)
+	var rtpPacket rtp.Packet
+	if err == nil {
+		dc := track.NewDataTrack[[]byte]("voice")
+		dc.Attach(suber.Stream)
+		for err == nil {
+			err = rtpPacket.Unmarshal(b)
+			if err == nil {
+				dc.Push(rtpPacket.Payload)
+			}
+			b, err = wsutil.ReadClientBinary(conn)
+		}
+	} else {
+		// baseStream.Error("receive", zap.Error(err))
 	}
 }
 

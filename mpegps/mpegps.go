@@ -21,6 +21,7 @@ const (
 type EsHandler interface {
 	ReceiveAudio(MpegPsEsStream)
 	ReceiveVideo(MpegPsEsStream)
+	ReceivePSM(util.Buffer)
 }
 
 type MpegPsEsStream struct {

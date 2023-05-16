@@ -182,6 +182,7 @@ func (dec *DecPSPackage) decProgramStreamMap() error {
 	if err != nil {
 		return err
 	}
+	defer dec.EsHandler.ReceivePSM(psm)
 	l := len(psm)
 	index := 2
 	programStreamInfoLen := util.BigEndian.Uint16(psm[index:])
