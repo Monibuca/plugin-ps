@@ -17,6 +17,8 @@ https://github.com/Monibuca/plugin-ps
 
 ```yaml
 ps:
+  http: # format refer to global config
+  publish: # format refer to global config
   publish: # format refer to global config
   relaymode: 1 # 0:relay only 1:protocol transfar only 2:relay and protocol transfar
 ```
@@ -33,3 +35,11 @@ ps:
 `/ps/api/replay?streamPath=xxx&dump=xxx`
 - dump means the file to replay, default is dump/ps
 - streamPath means the streamPath of replayed video stream, default is replay/dump/ps (if dump is abc, then streamPath is replay/abc)
+
+### read PS stream by ws protocol
+
+`ws://[host]/ps/[streamPath]`
+
+for example： ws://localhost:8080/ps/live/test
+
+the data is raw PS data, without rtp header
