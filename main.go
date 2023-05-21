@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,6 +162,8 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 		return fmt.Errorf("ssrc %d already exists", ssrc)
 	} else {
 		if dump != "" {
+			dump = filepath.Join(dump, streamPath)
+			os.MkdirAll(filepath.Dir(dump), 0766)
 			pubber.dump, err = os.OpenFile(dump, os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				return
