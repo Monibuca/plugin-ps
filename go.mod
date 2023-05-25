@@ -3,10 +3,11 @@ module m7s.live/plugin/ps/v4
 go 1.19
 
 require (
+	github.com/gobwas/ws v1.2.1
 	github.com/pion/rtp v1.7.13
 	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274
 	go.uber.org/zap v1.23.0
-	m7s.live/engine/v4 v4.12.8
+	m7s.live/engine/v4 v4.13.0
 )
 
 require (
@@ -15,6 +16,8 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/uuid v1.3.0 // indirect

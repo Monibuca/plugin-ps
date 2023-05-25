@@ -143,19 +143,19 @@ func (p *PSPublisher) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64
 	switch cid {
 	case mpeg2.PS_STREAM_AAC:
 		if p.AudioTrack != nil {
-			p.AudioTrack.WriteADTS(uint32(pts), frame)
+			p.AudioTrack.WriteADTS(uint32(pts), util.ReuseBuffer{frame})
 		} else {
 			p.AudioTrack = NewAAC(p.Publisher.Stream, p.pool)
 		}
 	case mpeg2.PS_STREAM_G711A:
 		if p.AudioTrack != nil {
-			p.AudioTrack.WriteRaw(uint32(pts), frame)
+			p.AudioTrack.WriteRawBytes(uint32(pts), util.ReuseBuffer{frame})
 		} else {
 			p.AudioTrack = NewG711(p.Publisher.Stream, true, p.pool)
 		}
 	case mpeg2.PS_STREAM_G711U:
 		if p.AudioTrack != nil {
-			p.AudioTrack.WriteRaw(uint32(pts), frame)
+			p.AudioTrack.WriteRawBytes(uint32(pts), util.ReuseBuffer{frame})
 		} else {
 			p.AudioTrack = NewG711(p.Publisher.Stream, false, p.pool)
 		}
@@ -260,19 +260,19 @@ func (p *PSPublisher) ReceiveAudio(es mpegps.MpegPsEsStream) {
 			p.AudioTrack = NewG711(p.Publisher.Stream, false, p.pool)
 		case mpegts.STREAM_TYPE_AAC:
 			p.AudioTrack = NewAAC(p.Publisher.Stream, p.pool)
-			p.WriteADTS(ts, payload)
+			p.WriteADTS(ts, util.ReuseBuffer{payload})
 		case 0: //推测编码类型
 			if payload[0] == 0xff && payload[1]>>4 == 0xf {
 				p.AudioTrack = NewAAC(p.Publisher.Stream)
-				p.WriteADTS(ts, payload)
+				p.WriteADTS(ts, util.ReuseBuffer{payload})
 			}
 		default:
 			p.Error("audio type not supported yet", zap.Uint8("type", es.Type))
 		}
 	} else if es.Type == mpegts.STREAM_TYPE_AAC {
-		p.WriteADTS(ts, payload)
+		p.WriteADTS(ts, util.ReuseBuffer{payload})
 	} else {
-		p.WriteRaw(ts, payload)
+		p.WriteRawBytes(ts, util.ReuseBuffer{payload})
 	}
 }
 func (p *PSPublisher) writeDump(ps util.Buffer) {
