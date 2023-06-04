@@ -48,7 +48,7 @@ func (c *PSConfig) OnEvent(event any) {
 	}
 }
 
-func (c *PSConfig) ServeTCP(conn *net.TCPConn) {
+func (c *PSConfig) ServeTCP(conn net.Conn) {
 	var err error
 	ps := make(util.Buffer, 1024)
 	tcpAddr := zap.String("tcp", conn.LocalAddr().String())
@@ -182,11 +182,11 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 					if _, ok := conf.shareTCP.LoadOrStore(listenaddr, &tcpConf); ok {
 					} else {
 						conf.streams.Store(ssrc, &pubber)
-						go tcpConf.Listen(PSPlugin, conf)
+						go tcpConf.ListenTCP(PSPlugin, conf)
 					}
 				} else {
 					tcpConf.ListenNum = 1
-					go tcpConf.Listen(pubber, &pubber)
+					go tcpConf.ListenTCP(pubber, &pubber)
 				}
 			case "udp":
 				if reuse {

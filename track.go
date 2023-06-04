@@ -10,7 +10,7 @@ import (
 
 type PSTrack struct {
 	track.Data[*util.ListItem[util.Buffer]]
-	PSM util.Buffer
+	PSM util.Buffer `json:"-" yaml:"-"`
 }
 
 func (ps *PSTrack) GetPSM() (result net.Buffers) {

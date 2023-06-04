@@ -1,10 +1,12 @@
 package mpegps
 
-import "io"
+import (
+	"io"
+)
 
-func (es *MpegPsEsStream) parsePESPacket(payload []byte) (err error) {
+func (es *MpegPsEsStream) parsePESPacket(payload []byte) (result *MpegPsEsStream, err error) {
 	if len(payload) < 4 {
-		return io.ErrShortBuffer
+		return nil, io.ErrShortBuffer
 	}
 	//data_alignment_indicator := (payload[0]&0b0001_0000)>>4 == 1
 	flag := payload[1]
@@ -12,24 +14,38 @@ func (es *MpegPsEsStream) parsePESPacket(payload []byte) (err error) {
 	dtsFlag := (flag&0b0100_0000)>>6 == 1
 	pesHeaderDataLen := payload[2]
 	if len(payload) < int(pesHeaderDataLen) {
-		return io.ErrShortBuffer
+		return nil, io.ErrShortBuffer
 	}
 	payload = payload[3:]
 	extraData := payload[:pesHeaderDataLen]
+	var pts, dts uint32
 	if ptsFlag && len(extraData) > 4 {
-		es.PTS = uint32(extraData[0]&0b0000_1110) << 29
-		es.PTS += uint32(extraData[1]) << 22
-		es.PTS += uint32(extraData[2]&0b1111_1110) << 14
-		es.PTS += uint32(extraData[3]) << 7
-		es.PTS += uint32(extraData[4]) >> 1
+		pts = uint32(extraData[0]&0b0000_1110) << 29
+		pts |= uint32(extraData[1]) << 22
+		pts |= uint32(extraData[2]&0b1111_1110) << 14
+		pts |= uint32(extraData[3]) << 7
+		pts |= uint32(extraData[4]) >> 1
 		if dtsFlag && len(extraData) > 9 {
-			es.DTS = uint32(extraData[5]&0b0000_1110) << 29
-			es.DTS += uint32(extraData[6]) << 22
-			es.DTS += uint32(extraData[7]&0b1111_1110) << 14
-			es.DTS += uint32(extraData[8]) << 7
-			es.DTS += uint32(extraData[9]) >> 1
+			dts = uint32(extraData[5]&0b0000_1110) << 29
+			dts |= uint32(extraData[6]) << 22
+			dts |= uint32(extraData[7]&0b1111_1110) << 14
+			dts |= uint32(extraData[8]) << 7
+			dts |= uint32(extraData[9]) >> 1
 		}
+
+	} else {
+		pts = es.PTS
+		dts = es.DTS
 	}
-	es.Write(payload[pesHeaderDataLen:])
+	if pts != es.PTS && es.Buffer.CanRead() {
+		clone := *es
+		result = &clone
+		// fmt.Println("clone", es.PTS, es.Buffer[4]&0x0f)
+		es.Buffer = nil
+	}
+	es.PTS = pts
+	es.DTS = dts
+	// fmt.Println("append", es.PTS, payload[pesHeaderDataLen+4]&0x0f)
+	es.Buffer = append(es.Buffer, payload[pesHeaderDataLen:]...)
 	return
 }

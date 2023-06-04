@@ -79,8 +79,9 @@ again:
 	if err = dec.Skip(int(psl)); err != nil {
 		return err
 	}
-	var video []byte
-	var nextStartCode, videoTs, videoCts uint32
+	var nextStartCode uint32
+	var payload []byte
+	var frame *MpegPsEsStream
 loop:
 	for err == nil {
 		if nextStartCode, err = dec.Uint32(); err != nil {
@@ -93,52 +94,26 @@ loop:
 		case StartCodeMAP:
 			err = dec.decProgramStreamMap()
 		case StartCodeVideo:
-			// var cts uint32
-			if err = dec.decPESPacket(); err == nil {
-				if len(video) == 0 {
-					dec.video.PTS = dec.PTS
-					dec.video.DTS = dec.DTS
-					// if dec.PTS == 0 {
-					// 	dec.PTS = ts
-					// }
-					// if dec.DTS != 0 {
-					// 	cts = dec.PTS - dec.DTS
-					// } else {
-					// 	dec.DTS = dec.PTS
-					// }
-					// videoTs = dec.DTS / 90
-					// videoCts = cts / 90
+			payload, err = dec.ReadPayload()
+			if err == nil {
+				frame, err = dec.video.parsePESPacket(payload)
+				if frame != nil {
+					dec.ReceiveVideo(*frame)
 				}
-				video = append(video, dec.Payload...)
-			} else {
-				// utils.Println("video", err)
 			}
 		case StartCodeAudio:
-			if err = dec.decPESPacket(); err == nil {
-				// ts := ts / 90
-				// if dec.PTS != 0 {
-				// 	ts = dec.PTS / 90
-				// }
-				dec.audio.PTS = dec.PTS
-				dec.audio.Buffer = dec.Payload
-				dec.ReceiveAudio(dec.audio)
-				// pusher.PushAudio(ts, dec.Payload)
-			} else {
-				// utils.Println("audio", err)
-			}
+			payload, err = dec.ReadPayload()
+			// if err == nil {
+			// 	frame, err = dec.audio.parsePESPacket(payload)
+			// 	if frame != nil {
+			// 		dec.ReceiveAudio(*frame)
+			// 	}
+			// }
 		case StartCodePS:
 			break loop
 		default:
 			dec.ReadPayload()
 		}
-	}
-	if len(video) > 0 {
-		dec.video.Buffer = video
-		dec.ReceiveVideo(dec.video)
-		if false {
-			println("video", videoTs, videoCts, len(video))
-		}
-		// pusher.PushVideo(videoTs, videoCts, video)
 	}
 	if nextStartCode == StartCodePS {
 		// utils.Println(aurora.Red("StartCodePS recursion..."), err)

@@ -57,6 +57,7 @@ func (ps *MpegPsStream) Feed(data util.Buffer) (err error) {
 	}
 	var begin util.Buffer
 	var payload []byte
+	var frame *MpegPsEsStream
 	defer func() {
 		if err != nil && begin.CanRead() {
 			ps.buffer.Reset()
@@ -68,14 +69,6 @@ func (ps *MpegPsStream) Feed(data util.Buffer) (err error) {
 		code := reader.ReadUint32()
 		switch code {
 		case StartCodePS:
-			if ps.audio.Buffer.CanRead() {
-				ps.ReceiveAudio(ps.audio)
-				ps.audio.Buffer = make(util.Buffer, 0)
-			}
-			if ps.video.Buffer.CanRead() {
-				ps.ReceiveVideo(ps.video)
-				ps.video.Buffer = make(util.Buffer, 0)
-			}
 			if reader.CanReadN(9) {
 				reader.ReadN(9)
 				if reader.CanRead() {
@@ -94,12 +87,18 @@ func (ps *MpegPsStream) Feed(data util.Buffer) (err error) {
 		case StartCodeVideo:
 			payload, err = ps.ReadPayload(reader)
 			if err == nil {
-				err = ps.video.parsePESPacket(payload)
+				frame, err = ps.video.parsePESPacket(payload)
+				if frame != nil {
+					ps.ReceiveVideo(*frame)
+				}
 			}
 		case StartCodeAudio:
 			payload, err = ps.ReadPayload(reader)
 			if err == nil {
-				err = ps.audio.parsePESPacket(payload)
+				frame, err = ps.audio.parsePESPacket(payload)
+				if frame != nil {
+					ps.ReceiveAudio(*frame)
+				}
 			}
 		case MEPGProgramEndCode:
 			return

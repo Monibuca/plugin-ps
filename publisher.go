@@ -25,8 +25,8 @@ type cacheItem struct {
 
 type PSPublisher struct {
 	Publisher
-	relayTrack *PSTrack
-	rtp.Packet
+	relayTrack     *PSTrack
+	rtp.Packet     `json:"-" yaml:"-"`
 	DisableReorder bool //是否禁用rtp重排序,TCP模式下应当禁用
 	// mpegps.MpegPsStream `json:"-" yaml:"-"`
 	// *mpegps.PSDemuxer `json:"-" yaml:"-"`
@@ -52,7 +52,7 @@ func (p *PSPublisher) OnEvent(event any) {
 	p.Publisher.OnEvent(event)
 }
 
-func (p *PSPublisher) ServeTCP(conn *net.TCPConn) {
+func (p *PSPublisher) ServeTCP(conn net.Conn) {
 	var err error
 	ps := make(util.Buffer, 1024)
 	p.SetIO(conn)
