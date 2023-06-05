@@ -3,7 +3,16 @@ package ps
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
+	"github.com/pion/rtp"
+	"go.uber.org/zap"
 	"io"
+	. "m7s.live/engine/v4"
+	"m7s.live/engine/v4/config"
+	"m7s.live/engine/v4/lang"
+	"m7s.live/engine/v4/track"
+	"m7s.live/engine/v4/util"
 	"net"
 	"net/http"
 	"os"
@@ -11,17 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
-
-	"github.com/gobwas/ws"
-	"github.com/gobwas/ws/wsutil"
-	"github.com/pion/rtp"
-	"go.uber.org/zap"
-	. "m7s.live/engine/v4"
-	"m7s.live/engine/v4/config"
-	"m7s.live/engine/v4/lang"
-	"m7s.live/engine/v4/track"
-	"m7s.live/engine/v4/util"
 )
 
 type PSConfig struct {
@@ -96,7 +94,7 @@ func (c *PSConfig) ServeUDP(conn *net.UDPConn) {
 	var lastSSRC uint32
 	var lastPubber *PSPublisher
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		//conn.SetReadDeadline(time.Now().Add(time.Second * 10))
 		n, _, err := conn.ReadFromUDP(bufUDP)
 		if err != nil {
 			return
