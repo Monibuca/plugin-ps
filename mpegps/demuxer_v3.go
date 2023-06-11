@@ -96,8 +96,7 @@ loop:
 		case StartCodeVideo:
 			payload, err = dec.ReadPayload()
 			if err == nil {
-				frame, err = dec.video.parsePESPacket(payload)
-				if frame != nil {
+				if frame, err = dec.video.parsePESPacket(payload); frame != nil {
 					dec.ReceiveVideo(*frame)
 				}
 			}

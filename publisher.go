@@ -97,7 +97,11 @@ func (p *PSPublisher) PushPS(ps util.Buffer) {
 	}
 	p.pushPS()
 }
-
+func (p *PSPublisher) pushRelay(){
+	item := p.pool.Get(len(p.Packet.Payload))
+	copy(item.Value, p.Packet.Payload)
+	p.relayTrack.Push(item)
+}
 // 解析rtp封装 https://www.ietf.org/rfc/rfc2250.txt
 func (p *PSPublisher) pushPS() {
 	if p.Stream == nil {
@@ -111,17 +115,16 @@ func (p *PSPublisher) pushPS() {
 		p.lastSeq = p.SequenceNumber - 1
 		p.pool = make(util.BytesPool, 17)
 	}
-	if conf.RelayMode != 0 {
-		item := p.pool.Get(len(p.Packet.Payload))
-		copy(item.Value, p.Packet.Payload)
-		p.relayTrack.Push(item)
-	}
 	if conf.RelayMode == 1 && p.relayTrack.PSM != nil {
+		p.pushRelay()
 		return
 	}
 	if p.DisableReorder {
 		p.Feed(p.Packet.Payload)
 		p.lastSeq = p.SequenceNumber
+		if conf.RelayMode != 0 {
+			p.pushRelay()
+		}
 	} else {
 		item := p.pool.Get(len(p.Packet.Payload))
 		copy(item.Value, p.Packet.Payload)
@@ -135,7 +138,11 @@ func (p *PSPublisher) pushPS() {
 			}
 			p.Feed(rtpPacket.Value)
 			p.lastSeq = rtpPacket.Seq
-			rtpPacket.Recycle()
+			if conf.RelayMode != 0 {
+				p.relayTrack.Push(rtpPacket.ListItem)
+			} else {
+				rtpPacket.Recycle()
+			}
 		}
 	}
 }

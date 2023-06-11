@@ -20,7 +20,7 @@ func (ps *PSTrack) GetPSM() (result net.Buffers) {
 
 func NewPSTrack(s common.IStream) *PSTrack {
 	result := &PSTrack{}
-	result.Init(20)
+	result.Init(1000)
 	result.SetStuff("ps", s)
 	result.Reset = func(f *common.DataFrame[*util.ListItem[util.Buffer]]) {
 		f.Value.Recycle()

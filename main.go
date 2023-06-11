@@ -52,7 +52,6 @@ func (c *PSConfig) ServeTCP(conn net.Conn) {
 	var err error
 	ps := make(util.Buffer, 1024)
 	tcpAddr := zap.String("tcp", conn.LocalAddr().String())
-
 	rtpLen := make([]byte, 2)
 	var puber *PSPublisher
 	if _, err = io.ReadFull(conn, rtpLen); err != nil {
@@ -182,7 +181,10 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 					if _, ok := conf.shareTCP.LoadOrStore(listenaddr, &tcpConf); ok {
 					} else {
 						conf.streams.Store(ssrc, &pubber)
-						go tcpConf.ListenTCP(PSPlugin, conf)
+						go func() {
+							tcpConf.ListenTCP(PSPlugin, conf)
+							conf.shareTCP.Delete(listenaddr)
+						}()
 					}
 				} else {
 					tcpConf.ListenNum = 1
@@ -202,7 +204,10 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 						}
 						udpConf.UDPConn = udpConn
 						conf.streams.Store(ssrc, &pubber)
-						go conf.ServeUDP(udpConn)
+						go func() {
+							conf.ServeUDP(udpConn)
+							conf.shareUDP.Delete(listenaddr)
+						}()
 					}
 				} else {
 					udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
