@@ -20,7 +20,7 @@ func (ps *PSSubscriber) OnEvent(event any) {
 		enter := false
 		go v.Play(ps.IO, func(data *common.DataFrame[*util.ListItem[util.Buffer]]) error {
 			if !enter {
-				if bytes.Compare(data.Value.Value[:3], []byte{0, 0, 1}) == 0 {
+				if bytes.Compare(data.Data.Value[:3], []byte{0, 0, 1}) == 0 {
 					enter = true
 				} else {
 					return nil
@@ -28,7 +28,7 @@ func (ps *PSSubscriber) OnEvent(event any) {
 			}
 			// fmt.Printf("% 02X", data.Value.Value[:10])
 			// fmt.Println()
-			return wsutil.WriteServerBinary(ps, data.Value.Value)
+			return wsutil.WriteServerBinary(ps, data.Data.Value)
 		})
 	default:
 		ps.Subscriber.OnEvent(event)

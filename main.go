@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -95,7 +94,7 @@ func (c *PSConfig) ServeUDP(conn *net.UDPConn) {
 	var lastSSRC uint32
 	var lastPubber *PSPublisher
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		// conn.SetReadDeadline(time.Now().Add(time.Second * 10))
 		n, _, err := conn.ReadFromUDP(bufUDP)
 		if err != nil {
 			return

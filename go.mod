@@ -7,7 +7,7 @@ require (
 	github.com/pion/rtp v1.7.13
 	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274
 	go.uber.org/zap v1.23.0
-	m7s.live/engine/v4 v4.13.0
+	m7s.live/engine/v4 v4.13.3
 )
 
 require (

@@ -9,7 +9,7 @@ import (
 )
 
 type PSTrack struct {
-	track.Data[*util.ListItem[util.Buffer]]
+	track.RecycleData[*util.ListItem[util.Buffer]]
 	PSM util.Buffer `json:"-" yaml:"-"`
 }
 
@@ -22,9 +22,6 @@ func NewPSTrack(s common.IStream) *PSTrack {
 	result := &PSTrack{}
 	result.Init(1000)
 	result.SetStuff("ps", s)
-	result.Reset = func(f *common.DataFrame[*util.ListItem[util.Buffer]]) {
-		f.Value.Recycle()
-	}
 	s.AddTrack(result)
 	return result
 }
