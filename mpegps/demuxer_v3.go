@@ -102,12 +102,12 @@ loop:
 			}
 		case StartCodeAudio:
 			payload, err = dec.ReadPayload()
-			// if err == nil {
-			// 	frame, err = dec.audio.parsePESPacket(payload)
-			// 	if frame != nil {
-			// 		dec.ReceiveAudio(*frame)
-			// 	}
-			// }
+			if err == nil {
+				frame, err = dec.audio.parsePESPacket(payload)
+				if frame != nil {
+					dec.ReceiveAudio(*frame)
+				}
+			}
 		case StartCodePS:
 			break loop
 		default:
