@@ -155,6 +155,9 @@ func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {
+	if PSPlugin.Disabled {
+		return fmt.Errorf("ps plugin is disabled")
+	}
 	var pubber PSPublisher
 	if _, loaded := conf.streams.LoadOrStore(ssrc, &pubber); loaded {
 		return fmt.Errorf("ssrc %d already exists", ssrc)
