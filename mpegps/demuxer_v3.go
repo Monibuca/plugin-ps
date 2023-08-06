@@ -54,7 +54,7 @@ func (dec *DecPSPackage) Feed(ps []byte) {
 	if len(ps) >= 4 && util.BigEndian.Uint32(ps) == StartCodePS {
 		if dec.Len() > 0 {
 			dec.Skip(4)
-			dec.Read(0)
+			dec.Read()
 			dec.Reset()
 		}
 		dec.Write(ps)
@@ -64,7 +64,7 @@ func (dec *DecPSPackage) Feed(ps []byte) {
 }
 
 // read the buffer and push video or audio
-func (dec *DecPSPackage) Read(ts uint32) error {
+func (dec *DecPSPackage) Read() error {
 again:
 	dec.clean()
 	if err := dec.Skip(9); err != nil {
@@ -186,40 +186,4 @@ func (dec *DecPSPackage) decProgramStreamMap() error {
 		programStreamMapLen -= 4 + elementaryStreamInfoLength
 	}
 	return nil
-}
-
-func (dec *DecPSPackage) decPESPacket() error {
-	payload, err := dec.ReadPayload()
-	if err != nil {
-		return err
-	}
-	if len(payload) < 4 {
-		return errors.New("not enough data")
-	}
-	//data_alignment_indicator := (payload[0]&0b0001_0000)>>4 == 1
-	flag := payload[1]
-	ptsFlag := flag>>7 == 1
-	dtsFlag := (flag&0b0100_0000)>>6 == 1
-	var pts, dts uint32
-	pesHeaderDataLen := payload[2]
-	payload = payload[3:]
-	extraData := payload[:pesHeaderDataLen]
-	if ptsFlag && len(extraData) > 4 {
-		pts = uint32(extraData[0]&0b0000_1110) << 29
-		pts += uint32(extraData[1]) << 22
-		pts += uint32(extraData[2]&0b1111_1110) << 14
-		pts += uint32(extraData[3]) << 7
-		pts += uint32(extraData[4]) >> 1
-		if dtsFlag && len(extraData) > 9 {
-			dts = uint32(extraData[5]&0b0000_1110) << 29
-			dts += uint32(extraData[6]) << 22
-			dts += uint32(extraData[7]&0b1111_1110) << 14
-			dts += uint32(extraData[8]) << 7
-			dts += uint32(extraData[9]) >> 1
-		}
-	}
-	dec.PTS = pts
-	dec.DTS = dts
-	dec.Payload = payload[pesHeaderDataLen:]
-	return err
 }

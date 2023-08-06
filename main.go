@@ -135,9 +135,8 @@ func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	defer suber.Stop()
-	b, err := wsutil.ReadClientBinary(conn)
+	var b []byte
+	b, err = wsutil.ReadClientBinary(conn)
 	var rtpPacket rtp.Packet
 	if err == nil {
 		dc := track.NewDataTrack[[]byte]("voice")
@@ -149,9 +148,8 @@ func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			b, err = wsutil.ReadClientBinary(conn)
 		}
-	} else {
-		// baseStream.Error("receive", zap.Error(err))
 	}
+	suber.Stop(zap.Error(err))
 }
 
 func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {
