@@ -1,8 +1,6 @@
 package ps
 
 import (
-	"encoding/binary"
-	"io"
 	"net"
 	"os"
 	"time"
@@ -47,29 +45,21 @@ func (p *PSPublisher) OnEvent(event any) {
 			p.relayTrack = NewPSTrack(p.Stream)
 		}
 	case SEclose, SEKick:
-		conf.streams.Delete(p.Stream.Path)
+		conf.streams.Delete(p.Header.SSRC)
 	}
 	p.Publisher.OnEvent(event)
 }
 
 func (p *PSPublisher) ServeTCP(conn net.Conn) {
-	var err error
-	ps := make(util.Buffer, 1024)
+	reader := TCPRTP{
+		Conn: conn,
+	}
 	p.SetIO(conn)
 	defer p.Stop()
 	tcpAddr := zap.String("tcp", conn.LocalAddr().String())
 	p.Info("start receive ps stream from", tcpAddr)
 	defer p.Info("stop receive ps stream from", tcpAddr)
-	for err == nil {
-		if _, err = io.ReadFull(conn, p.dumpLen[:2]); err != nil {
-			return
-		}
-		ps.Relloc(int(binary.BigEndian.Uint16(p.dumpLen[:2])))
-		if _, err = io.ReadFull(conn, ps); err != nil {
-			return
-		}
-		p.PushPS(ps)
-	}
+	reader.Start(p.PushPS)
 }
 
 func (p *PSPublisher) ServeUDP(conn *net.UDPConn) {
@@ -89,19 +79,22 @@ func (p *PSPublisher) ServeUDP(conn *net.UDPConn) {
 	}
 }
 
-func (p *PSPublisher) PushPS(ps util.Buffer) {
-	if err := p.Unmarshal(ps); err != nil {
+func (p *PSPublisher) PushPS(ps util.Buffer) (err error) {
+	if err = p.Unmarshal(ps); err != nil {
 		p.Error("gb28181 decode rtp error:", zap.Error(err))
 	} else if !p.IsClosed() {
 		p.writeDump(ps)
 	}
 	p.pushPS()
+	return
 }
-func (p *PSPublisher) pushRelay(){
+
+func (p *PSPublisher) pushRelay() {
 	item := p.pool.Get(len(p.Packet.Payload))
 	copy(item.Value, p.Packet.Payload)
 	p.relayTrack.Push(item)
 }
+
 // 解析rtp封装 https://www.ietf.org/rfc/rfc2250.txt
 func (p *PSPublisher) pushPS() {
 	if p.Stream == nil {

@@ -1,9 +1,7 @@
 package ps
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -22,6 +21,12 @@ import (
 	"m7s.live/engine/v4/track"
 	"m7s.live/engine/v4/util"
 )
+
+type PSStream struct {
+	Flag bool
+	*PSPublisher
+	net.Conn
+}
 
 type PSConfig struct {
 	config.HTTP
@@ -48,40 +53,56 @@ func (c *PSConfig) OnEvent(event any) {
 }
 
 func (c *PSConfig) ServeTCP(conn net.Conn) {
-	var err error
-	ps := make(util.Buffer, 1024)
+	startTime := time.Now()
+	reader := TCPRTP{
+		Conn: conn,
+	}
 	tcpAddr := zap.String("tcp", conn.LocalAddr().String())
-	rtpLen := make([]byte, 2)
 	var puber *PSPublisher
-	if _, err = io.ReadFull(conn, rtpLen); err != nil {
-		return
-	}
-	ps.Relloc(int(binary.BigEndian.Uint16(rtpLen)))
-	if _, err = io.ReadFull(conn, ps); err != nil {
-		return
-	}
-	var rtpPacket rtp.Packet
-	if err := rtpPacket.Unmarshal(ps); err != nil {
-		PSPlugin.Error("gb28181 decode rtp error:", zap.Error(err))
-	}
-	ssrc := rtpPacket.SSRC
-	if v, ok := conf.streams.Load(ssrc); ok {
-		puber = v.(*PSPublisher)
-		puber.Info("start receive ps stream from", tcpAddr)
-		defer puber.Info("stop receive ps stream from", tcpAddr)
-		defer puber.Stop()
-		for err == nil {
-			puber.PushPS(ps)
-			if _, err = io.ReadFull(conn, rtpLen); err != nil {
-				return
+	var psStream *PSStream
+	var cache net.Buffers
+	err := reader.Start(func(data util.Buffer) (err error) {
+		if psStream == nil {
+			var rtpPacket rtp.Packet
+			if err = rtpPacket.Unmarshal(data); err != nil {
+				PSPlugin.Error("gb28181 decode rtp error:", zap.Error(err))
 			}
-			ps.Relloc(int(binary.BigEndian.Uint16(rtpLen)))
-			if _, err = io.ReadFull(conn, ps); err != nil {
-				return
+			ssrc := rtpPacket.SSRC
+			stream, loaded := conf.streams.LoadOrStore(ssrc, &PSStream{
+				Conn: conn,
+			})
+			psStream = stream.(*PSStream)
+			if loaded {
+				if psStream.Conn != nil {
+					return fmt.Errorf("ssrc conflict")
+				}
 			}
+			return
 		}
-	} else {
-		PSPlugin.Error("ssrc not found", zap.Uint32("ssrc", ssrc))
+		if puber == nil {
+			if psStream.PSPublisher != nil {
+				puber = psStream.PSPublisher
+				puber.Info("start receive ps stream from", tcpAddr)
+				for _, buf := range cache {
+					puber.PushPS(buf)
+				}
+				puber.PushPS(data)
+				return
+			} else {
+				PSPlugin.Warn("publisher not found", zap.Uint32("ssrc", psStream.SSRC))
+				cache = append(cache, append([]byte(nil), data...))
+				if time.Since(startTime) > time.Second*5 {
+					return fmt.Errorf("publisher not found")
+				}
+			}
+		} else {
+			puber.PushPS(data)
+		}
+		return
+	})
+	if puber != nil {
+		puber.Stop(zap.Error(err))
+		puber.Info("stop receive ps stream from", tcpAddr)
 	}
 }
 
@@ -157,66 +178,69 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 		return fmt.Errorf("ps plugin is disabled")
 	}
 	var pubber PSPublisher
-	if _, loaded := conf.streams.LoadOrStore(ssrc, &pubber); loaded {
-		return fmt.Errorf("ssrc %d already exists", ssrc)
-	} else {
-		if dump != "" {
-			dump = filepath.Join(dump, streamPath)
-			os.MkdirAll(filepath.Dir(dump), 0766)
-			pubber.dump, err = os.OpenFile(dump, os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				return
-			}
+	stream, loaded := conf.streams.LoadOrStore(ssrc, &PSStream{Flag: true})
+	psStream := stream.(*PSStream)
+	if loaded {
+		if psStream.Flag {
+			return fmt.Errorf("ssrc %d already exists", ssrc)
 		}
-		if err = PSPlugin.Publish(streamPath, &pubber); err == nil {
-			protocol, listenaddr, _ := strings.Cut(port, ":")
-			if !strings.Contains(listenaddr, ":") {
-				listenaddr = ":" + listenaddr
-			}
-			switch protocol {
-			case "tcp":
-				var tcpConf config.TCP
-				tcpConf.ListenAddr = listenaddr
-				if reuse {
-					if _, ok := conf.shareTCP.LoadOrStore(listenaddr, &tcpConf); ok {
-					} else {
-						conf.streams.Store(ssrc, &pubber)
-						go func() {
-							tcpConf.ListenTCP(PSPlugin, conf)
-							conf.shareTCP.Delete(listenaddr)
-						}()
-					}
+		psStream.Flag = true
+	}
+	if dump != "" {
+		dump = filepath.Join(dump, streamPath)
+		os.MkdirAll(filepath.Dir(dump), 0766)
+		pubber.dump, err = os.OpenFile(dump, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
+	}
+	if err = PSPlugin.Publish(streamPath, &pubber); err == nil {
+		psStream.PSPublisher = &pubber
+		protocol, listenaddr, _ := strings.Cut(port, ":")
+		if !strings.Contains(listenaddr, ":") {
+			listenaddr = ":" + listenaddr
+		}
+		switch protocol {
+		case "tcp":
+			var tcpConf config.TCP
+			tcpConf.ListenAddr = listenaddr
+			if reuse {
+				if _, ok := conf.shareTCP.LoadOrStore(listenaddr, &tcpConf); ok {
 				} else {
-					tcpConf.ListenNum = 1
-					go tcpConf.ListenTCP(pubber, &pubber)
+					go func() {
+						tcpConf.ListenTCP(PSPlugin, conf)
+						conf.shareTCP.Delete(listenaddr)
+					}()
 				}
-			case "udp":
-				if reuse {
-					var udpConf struct {
-						*net.UDPConn
-					}
-					if _, ok := conf.shareUDP.LoadOrStore(listenaddr, &udpConf); ok {
-					} else {
-						udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
-						if err != nil {
-							PSPlugin.Error("udp listen error", zap.Error(err))
-							return err
-						}
-						udpConf.UDPConn = udpConn
-						conf.streams.Store(ssrc, &pubber)
-						go func() {
-							conf.ServeUDP(udpConn)
-							conf.shareUDP.Delete(listenaddr)
-						}()
-					}
+			} else {
+				tcpConf.ListenNum = 1
+				go tcpConf.ListenTCP(pubber, &pubber)
+			}
+		case "udp":
+			if reuse {
+				var udpConf struct {
+					*net.UDPConn
+				}
+				if _, ok := conf.shareUDP.LoadOrStore(listenaddr, &udpConf); ok {
 				} else {
 					udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
 					if err != nil {
-						pubber.Stop()
+						PSPlugin.Error("udp listen error", zap.Error(err))
 						return err
-					} else {
-						go pubber.ServeUDP(udpConn)
 					}
+					udpConf.UDPConn = udpConn
+					go func() {
+						conf.ServeUDP(udpConn)
+						conf.shareUDP.Delete(listenaddr)
+					}()
+				}
+			} else {
+				udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
+				if err != nil {
+					pubber.Stop()
+					return err
+				} else {
+					go pubber.ServeUDP(udpConn)
 				}
 			}
 		}
