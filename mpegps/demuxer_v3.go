@@ -81,7 +81,7 @@ again:
 	}
 	var nextStartCode uint32
 	var payload []byte
-	var frame *MpegPsEsStream
+	var frame MpegPsEsStream
 loop:
 	for err == nil {
 		if nextStartCode, err = dec.Uint32(); err != nil {
@@ -96,16 +96,16 @@ loop:
 		case StartCodeVideo:
 			payload, err = dec.ReadPayload()
 			if err == nil {
-				if frame, err = dec.video.parsePESPacket(payload); frame != nil {
-					dec.ReceiveVideo(*frame)
+				if frame, err = dec.video.parsePESPacket(payload); err == nil && frame.Buffer.Len() > 0 {
+					dec.ReceiveVideo(frame)
 				}
 			}
 		case StartCodeAudio:
 			payload, err = dec.ReadPayload()
 			if err == nil {
 				frame, err = dec.audio.parsePESPacket(payload)
-				if frame != nil {
-					dec.ReceiveAudio(*frame)
+				if err == nil && frame.Buffer.Len() > 0 {
+					dec.ReceiveAudio(frame)
 				}
 			}
 		case StartCodePS:

@@ -28,7 +28,7 @@ func (t *TCPRTP) Start(onRTP func(util.Buffer) error) (err error) {
 				if buffer[i]>>6 != 2 || buffer[i]&0x0f > 15 || buffer[i+1]&0x7f > 127 {
 					continue
 				}
-				rtpLen = int(binary.BigEndian.Uint16(buffer[i-2 : i-1]))
+				rtpLen = int(binary.BigEndian.Uint16(buffer[i-2 : i]))
 				if buffer.Len() < rtpLen {
 					copy(buffer, buffer[i:])
 					if _, err = io.ReadFull(reader, buffer[buffer.Len():]); err != nil {
