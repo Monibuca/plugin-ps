@@ -22,14 +22,14 @@ func (t *TCPRTP) Start(onRTP func(util.Buffer) error) (err error) {
 			return
 		}
 		rtpLen := int(binary.BigEndian.Uint16(rtpLenBuf[:2]))
-		if rtpLenBuf[2]>>6 != 2 || rtpLenBuf[2]&0x0f > 15 || rtpLenBuf[3]&0x7f > 127 {
-			buffer.Write(rtpLenBuf)
-			for i := 12; i < buffer.Len()-2; i++ {
-				if buffer[i]>>6 != 2 || buffer[i]&0x0f > 15 || buffer[i+1]&0x7f > 127 {
+		if rtpLenBuf[2]>>6 != 2 || rtpLenBuf[2]&0x0f > 15 || rtpLenBuf[3]&0x7f > 127 { //长度后面正常紧跟 rtp 头，如果不是，说明长度不对，此处并非长度，而是可能之前的 rtp 包不完整导致的，需要往前查找
+			buffer.Write(rtpLenBuf)                //已读的数据先写入缓存
+			for i := 12; i < buffer.Len()-2; i++ { // 缓存中 rtp 头就不用判断了，跳过 12 字节往后寻找
+				if buffer[i]>>6 != 2 || buffer[i]&0x0f > 15 || buffer[i+1]&0x7f > 127 { // 一直找到 rtp 头为止
 					continue
 				}
-				rtpLen = int(binary.BigEndian.Uint16(buffer[i-2 : i]))
-				if buffer.Len() < rtpLen {
+				rtpLen = int(binary.BigEndian.Uint16(buffer[i-2 : i])) // rtp 头前面两个字节是长度
+				if buffer.Len()-i < rtpLen {                           // 缓存中的数据不够一个 rtp 包，继续读取
 					copy(buffer, buffer[i:])
 					if _, err = io.ReadFull(reader, buffer[buffer.Len():]); err != nil {
 						return
