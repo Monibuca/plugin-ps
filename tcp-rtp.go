@@ -29,9 +29,10 @@ func (t *TCPRTP) Start(onRTP func(util.Buffer) error) (err error) {
 					continue
 				}
 				rtpLen = int(binary.BigEndian.Uint16(buffer[i-2 : i])) // rtp 头前面两个字节是长度
-				if buffer.Len()-i < rtpLen {                           // 缓存中的数据不够一个 rtp 包，继续读取
+				if remain := buffer.Len() - i; remain < rtpLen {       // 缓存中的数据不够一个 rtp 包，继续读取
 					copy(buffer, buffer[i:])
-					if _, err = io.ReadFull(reader, buffer[buffer.Len():]); err != nil {
+					buffer.Relloc(rtpLen)
+					if _, err = io.ReadFull(reader, buffer[remain:]); err != nil {
 						return
 					}
 					err = onRTP(buffer)
