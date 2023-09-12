@@ -127,7 +127,7 @@ func (c *PSConfig) ServeUDP(conn *net.UDPConn) {
 		if lastSSRC != ssrc {
 			if v, ok := conf.streams.Load(ssrc); ok {
 				lastSSRC = ssrc
-				lastPubber = v.(*PSPublisher)
+				lastPubber = v.(*PSStream).PSPublisher
 			} else {
 				PSPlugin.Error("ssrc not found", zap.Uint32("ssrc", ssrc))
 				continue
