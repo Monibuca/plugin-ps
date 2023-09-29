@@ -172,7 +172,7 @@ func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	suber.Stop(zap.Error(err))
 }
-
+// Deprecated: 请使用PSPublisher的Receive
 func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {
 	if PSPlugin.Disabled {
 		return fmt.Errorf("ps plugin is disabled")
@@ -199,6 +199,12 @@ func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error)
 		protocol, listenaddr, _ := strings.Cut(port, ":")
 		if !strings.Contains(listenaddr, ":") {
 			listenaddr = ":" + listenaddr
+		}
+		// TODO: 暂时通过streamPath来判断是否是录像流
+		tmp := strings.Split(pubber.Stream.StreamName, "/")
+		if len(tmp) > 1 {
+			pubber.Stream.DelayCloseTimeout = time.Second * 10
+			pubber.Stream.IdleTimeout = time.Second * 10
 		}
 		switch protocol {
 		case "tcp":

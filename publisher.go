@@ -1,8 +1,11 @@
 package ps
 
 import (
+	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pion/rtp"
@@ -11,6 +14,7 @@ import (
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/codec"
 	"m7s.live/engine/v4/codec/mpegts"
+	"m7s.live/engine/v4/config"
 	. "m7s.live/engine/v4/track"
 	"m7s.live/engine/v4/util"
 	"m7s.live/plugin/ps/v4/mpegps"
@@ -310,4 +314,78 @@ func (p *PSPublisher) ReceivePSM(buf util.Buffer) {
 	if p.relayTrack != nil {
 		p.relayTrack.PSM = buf.Clone()
 	}
+}
+
+func (p *PSPublisher) Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {
+	if PSPlugin.Disabled {
+		return fmt.Errorf("ps plugin is disabled")
+	}
+	stream, loaded := conf.streams.LoadOrStore(ssrc, &PSStream{Flag: true})
+	psStream := stream.(*PSStream)
+	if loaded {
+		if psStream.Flag {
+			return fmt.Errorf("ssrc %d already exists", ssrc)
+		}
+		psStream.Flag = true
+	}
+	if dump != "" {
+		dump = filepath.Join(dump, streamPath)
+		os.MkdirAll(filepath.Dir(dump), 0766)
+		p.dump, err = os.OpenFile(dump, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
+	}
+	if err = PSPlugin.Publish(streamPath, p); err == nil {
+		psStream.PSPublisher = p
+		protocol, listenaddr, _ := strings.Cut(port, ":")
+		if !strings.Contains(listenaddr, ":") {
+			listenaddr = ":" + listenaddr
+		}
+		switch protocol {
+		case "tcp":
+			var tcpConf config.TCP
+			tcpConf.ListenAddr = listenaddr
+			if reuse {
+				if _, ok := conf.shareTCP.LoadOrStore(listenaddr, &tcpConf); ok {
+				} else {
+					go func() {
+						tcpConf.ListenTCP(PSPlugin, conf)
+						conf.shareTCP.Delete(listenaddr)
+					}()
+				}
+			} else {
+				tcpConf.ListenNum = 1
+				go tcpConf.ListenTCP(p, p)
+			}
+		case "udp":
+			if reuse {
+				var udpConf struct {
+					*net.UDPConn
+				}
+				if _, ok := conf.shareUDP.LoadOrStore(listenaddr, &udpConf); ok {
+				} else {
+					udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
+					if err != nil {
+						PSPlugin.Error("udp listen error", zap.Error(err))
+						return err
+					}
+					udpConf.UDPConn = udpConn
+					go func() {
+						conf.ServeUDP(udpConn)
+						conf.shareUDP.Delete(listenaddr)
+					}()
+				}
+			} else {
+				udpConn, err := util.ListenUDP(listenaddr, 1024*1024)
+				if err != nil {
+					p.Stop()
+					return err
+				} else {
+					go p.ServeUDP(udpConn)
+				}
+			}
+		}
+	}
+	return
 }
