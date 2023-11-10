@@ -310,10 +310,13 @@ func (p *PSPublisher) Replay(f *os.File) (err error) {
 	}
 	return
 }
-func (p *PSPublisher) ReceivePSM(buf util.Buffer) {
+
+func (p *PSPublisher) ReceivePSM(buf util.Buffer, hasAudio bool, hasVideo bool) {
 	if p.relayTrack != nil {
 		p.relayTrack.PSM = buf.Clone()
 	}
+	p.Config.PubAudio = hasAudio
+	p.Config.PubVideo = hasVideo
 }
 
 func (p *PSPublisher) Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {

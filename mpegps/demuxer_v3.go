@@ -30,8 +30,8 @@ type DecPSPackage struct {
 	PTS     uint32
 	DTS     uint32
 	EsHandler
-	audio MpegPsEsStream
-	video MpegPsEsStream
+	audio *MpegPsEsStream
+	video *MpegPsEsStream
 }
 
 func (dec *DecPSPackage) clean() {
@@ -95,16 +95,15 @@ loop:
 			err = dec.decProgramStreamMap()
 		case StartCodeVideo:
 			payload, err = dec.ReadPayload()
-			if err == nil {
+			if err == nil && dec.video != nil {
 				if frame, err = dec.video.parsePESPacket(payload); err == nil && frame.Buffer.Len() > 0 {
 					dec.ReceiveVideo(frame)
 				}
 			}
 		case StartCodeAudio:
 			payload, err = dec.ReadPayload()
-			if err == nil {
-				frame, err = dec.audio.parsePESPacket(payload)
-				if err == nil && frame.Buffer.Len() > 0 {
+			if err == nil && dec.audio != nil {
+				if frame, err = dec.audio.parsePESPacket(payload); err == nil && frame.Buffer.Len() > 0 {
 					dec.ReceiveAudio(frame)
 				}
 			}
@@ -156,7 +155,6 @@ func (dec *DecPSPackage) decProgramStreamMap() error {
 	if err != nil {
 		return err
 	}
-	defer dec.EsHandler.ReceivePSM(psm)
 	l := len(psm)
 	index := 2
 	programStreamInfoLen := util.BigEndian.Uint16(psm[index:])
@@ -173,9 +171,13 @@ func (dec *DecPSPackage) decProgramStreamMap() error {
 		elementaryStreamID := psm[index]
 		index++
 		if elementaryStreamID >= 0xe0 && elementaryStreamID <= 0xef {
-			dec.video.Type = streamType
+			dec.video = &MpegPsEsStream{
+				Type: streamType,
+			}
 		} else if elementaryStreamID >= 0xc0 && elementaryStreamID <= 0xdf {
-			dec.audio.Type = streamType
+			dec.audio = &MpegPsEsStream{
+				Type: streamType,
+			}
 		}
 		if l <= index+1 {
 			break
@@ -185,5 +187,6 @@ func (dec *DecPSPackage) decProgramStreamMap() error {
 		index += int(elementaryStreamInfoLength)
 		programStreamMapLen -= 4 + elementaryStreamInfoLength
 	}
+	dec.EsHandler.ReceivePSM(psm, dec.audio != nil, dec.video != nil)
 	return nil
 }
