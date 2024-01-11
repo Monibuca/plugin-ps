@@ -32,7 +32,7 @@ type PSConfig struct {
 	config.HTTP
 	config.Publish
 	config.Subscribe
-	RelayMode int // 转发模式,0:转协议+不转发,1:不转协议+转发，2:转协议+转发
+	RelayMode int `desc:"转发模式" enum:"0:只转协议,1:只转发,2:转协议+转发"` // 转发模式,0:转协议+不转发,1:不转协议+转发，2:转协议+转发
 	streams   sync.Map
 	shareTCP  sync.Map
 	shareUDP  sync.Map
@@ -172,6 +172,7 @@ func (c *PSConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	suber.Stop(zap.Error(err))
 }
+
 // Deprecated: 请使用PSPublisher的Receive
 func Receive(streamPath, dump, port string, ssrc uint32, reuse bool) (err error) {
 	if PSPlugin.Disabled {
