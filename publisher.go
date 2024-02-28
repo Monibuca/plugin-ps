@@ -149,33 +149,33 @@ func (p *PSPublisher) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64
 		if p.AudioTrack != nil {
 			p.AudioTrack.WriteADTS(uint32(pts), util.ReuseBuffer{frame})
 		} else {
-			p.AudioTrack = NewAAC(p.Publisher.Stream, p.pool)
+			p.CreateAudioTrack(codec.CodecID_AAC, p.pool)
 		}
 	case mpeg2.PS_STREAM_G711A:
 		if p.AudioTrack != nil {
 			p.AudioTrack.WriteRawBytes(uint32(pts), util.ReuseBuffer{frame})
 		} else {
-			p.AudioTrack = NewG711(p.Publisher.Stream, true, p.pool)
+			p.CreateAudioTrack(codec.CodecID_PCMA, p.pool)
 		}
 	case mpeg2.PS_STREAM_G711U:
 		if p.AudioTrack != nil {
 			p.AudioTrack.WriteRawBytes(uint32(pts), util.ReuseBuffer{frame})
 		} else {
-			p.AudioTrack = NewG711(p.Publisher.Stream, false, p.pool)
+			p.CreateAudioTrack(codec.CodecID_PCMU, p.pool)
 		}
 	case mpeg2.PS_STREAM_H264:
 		if p.VideoTrack != nil {
 			// p.WriteNalu(uint32(pts), uint32(dts), frame)
 			p.WriteAnnexB(uint32(pts), uint32(dts), frame)
 		} else {
-			p.VideoTrack = NewH264(p.Publisher.Stream, p.pool)
+			p.CreateVideoTrack(codec.CodecID_H264, p.pool)
 		}
 	case mpeg2.PS_STREAM_H265:
 		if p.VideoTrack != nil {
 			// p.WriteNalu(uint32(pts), uint32(dts), frame)
 			p.WriteAnnexB(uint32(pts), uint32(dts), frame)
 		} else {
-			p.VideoTrack = NewH265(p.Publisher.Stream, p.pool)
+			p.CreateVideoTrack(codec.CodecID_H265, p.pool)
 		}
 	}
 }
@@ -220,9 +220,9 @@ func (p *PSPublisher) ReceiveVideo(es mpegps.MpegPsEsStream) {
 	if p.VideoTrack == nil {
 		switch es.Type {
 		case mpegts.STREAM_TYPE_H264:
-			p.VideoTrack = NewH264(p.Publisher.Stream, p.pool)
+			p.CreateVideoTrack(codec.CodecID_H264, p.pool)
 		case mpegts.STREAM_TYPE_H265:
-			p.VideoTrack = NewH265(p.Publisher.Stream, p.pool)
+			p.CreateVideoTrack(codec.CodecID_H265, p.pool)
 		default:
 			//推测编码类型
 			var maybe264 codec.H264NALUType
@@ -234,10 +234,10 @@ func (p *PSPublisher) ReceiveVideo(es mpegps.MpegPsEsStream) {
 				codec.NALU_SPS,
 				codec.NALU_PPS,
 				codec.NALU_Access_Unit_Delimiter:
-				p.VideoTrack = NewH264(p.Publisher.Stream, p.pool)
+				p.CreateVideoTrack(codec.CodecID_H264, p.pool)
 			default:
 				p.Info("maybe h265", zap.Uint8("type", maybe264.Byte()))
-				p.VideoTrack = NewH265(p.Publisher.Stream, p.pool)
+				p.CreateVideoTrack(codec.CodecID_H265, p.pool)
 			}
 		}
 	}
@@ -259,15 +259,15 @@ func (p *PSPublisher) ReceiveAudio(es mpegps.MpegPsEsStream) {
 	if p.AudioTrack == nil {
 		switch es.Type {
 		case mpegts.STREAM_TYPE_G711A:
-			p.AudioTrack = NewG711(p.Publisher.Stream, true, p.pool)
+			p.CreateAudioTrack(codec.CodecID_PCMA, p.pool)
 		case mpegts.STREAM_TYPE_G711U:
-			p.AudioTrack = NewG711(p.Publisher.Stream, false, p.pool)
+			p.CreateAudioTrack(codec.CodecID_PCMU, p.pool)
 		case mpegts.STREAM_TYPE_AAC:
-			p.AudioTrack = NewAAC(p.Publisher.Stream, p.pool)
+			p.CreateAudioTrack(codec.CodecID_AAC, p.pool)
 			p.WriteADTS(ts, util.ReuseBuffer{payload})
 		case 0: //推测编码类型
 			if payload[0] == 0xff && payload[1]>>4 == 0xf {
-				p.AudioTrack = NewAAC(p.Publisher.Stream)
+				p.AudioTrack = NewAAC(p)
 				p.WriteADTS(ts, util.ReuseBuffer{payload})
 			}
 		default:
